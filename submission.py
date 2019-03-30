@@ -16,7 +16,7 @@ import skimage.transform
 import numpy as np
 import time
 import math
-from utils import preprocess 
+from utils import preprocess
 from models import *
 
 # 2012 data /media/jiaren/ImageNet/data_scene_flow_2012/testing/
@@ -46,7 +46,7 @@ if args.cuda:
 if args.KITTI == '2015':
    from dataloader import KITTI_submission_loader as DA
 else:
-   from dataloader import KITTI_submission_loader2012 as DA  
+   from dataloader import KITTI_submission_loader2012 as DA
 
 
 test_left_img, test_right_img = DA.dataloader(args.datapath)
@@ -72,7 +72,7 @@ def test(imgL,imgR):
 
         if args.cuda:
            imgL = torch.FloatTensor(imgL).cuda()
-           imgR = torch.FloatTensor(imgR).cuda()     
+           imgR = torch.FloatTensor(imgR).cuda()
 
         imgL, imgR= Variable(imgL), Variable(imgR)
 
@@ -109,7 +109,8 @@ def main():
        top_pad   = 384-imgL_o.shape[0]
        left_pad  = 1248-imgL_o.shape[1]
        img = pred_disp[top_pad:,:-left_pad]
-       skimage.io.imsave(test_left_img[inx].split('/')[-1],(img*256).astype('uint16'))
+       #skimage.io.imsave('outputs_img/'+test_left_img[inx].split('/')[-1],(img*256).astype('uint16'))
+       np.save(os.path.join('outputs_obj', test_left_img[inx].split('/')[-1].replace('.png', '')), img)
 
 if __name__ == '__main__':
    main()
