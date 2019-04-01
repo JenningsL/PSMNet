@@ -18,11 +18,12 @@ import time
 import math
 from utils import preprocess
 from models import *
+from dataloader import KITTIObjectLoader
 
 # 2012 data /media/jiaren/ImageNet/data_scene_flow_2012/testing/
 
 parser = argparse.ArgumentParser(description='PSMNet')
-parser.add_argument('--KITTI', default='2015',
+parser.add_argument('--kitti_path', default='2015',
                     help='KITTI version')
 parser.add_argument('--datapath', default='/media/jiaren/ImageNet/data_scene_flow_2015/testing/',
                     help='select model')
@@ -43,13 +44,7 @@ torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-if args.KITTI == '2015':
-   from dataloader import KITTI_submission_loader as DA
-else:
-   from dataloader import KITTI_submission_loader2012 as DA
-
-
-test_left_img, test_right_img = DA.dataloader(args.datapath)
+dataloader = KITTIObjectLoader(args.kitti_path, 'trainval')
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
@@ -63,21 +58,22 @@ model.cuda()
 
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel)
-    model.load_state_dict(state_dict['state_dict'])
+    model.load_state_dict(state_dict['state_dict'], strict=False)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-def test(imgL,imgR):
+def test(imgL,imgR, sparse_disp_L):
         model.eval()
 
         if args.cuda:
            imgL = torch.FloatTensor(imgL).cuda()
            imgR = torch.FloatTensor(imgR).cuda()
+           sparse_disp_L = torch.FloatTensor(sparse_disp_L).cuda()
 
-        imgL, imgR= Variable(imgL), Variable(imgR)
+        imgL, imgR, sparse_disp_L = Variable(imgL), Variable(imgR), Variable(sparse_disp_L)
 
         with torch.no_grad():
-            output = model(imgL,imgR)
+            output = model(imgL,imgR, sparse_disp_L)
         output = torch.squeeze(output)
         pred_disp = output.data.cpu().numpy()
 
@@ -87,36 +83,32 @@ def test(imgL,imgR):
 def main():
    processed = preprocess.get_transform(augment=False)
 
-   for inx in range(len(test_left_img)):
-
-       imgL_o = (skimage.io.imread(test_left_img[inx]).astype('float32'))
-       imgR_o = (skimage.io.imread(test_right_img[inx]).astype('float32'))
+   for inx in range(len(dataloader)):
+       imgL_o, imgR_o, sparse_disp_L = dataloader[inx]
+       # imgL_o = (skimage.io.imread(test_left_img[inx]).astype('float32'))
+       # imgR_o = (skimage.io.imread(test_right_img[inx]).astype('float32'))
        imgL = processed(imgL_o).numpy()
        imgR = processed(imgR_o).numpy()
        imgL = np.reshape(imgL,[1,3,imgL.shape[1],imgL.shape[2]])
        imgR = np.reshape(imgR,[1,3,imgR.shape[1],imgR.shape[2]])
+       sparse_disp_L = np.reshape(sparse_disp_L,[1,1,sparse_disp_L.shape[0],sparse_disp_L.shape[1]])
 
        # pad to (384, 1248)
        top_pad = 384-imgL.shape[2]
        left_pad = 1248-imgL.shape[3]
        imgL = np.lib.pad(imgL,((0,0),(0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
        imgR = np.lib.pad(imgR,((0,0),(0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
+       sparse_disp_L = np.lib.pad(sparse_disp_L,((0,0),(0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
 
        start_time = time.time()
-       pred_disp = test(imgL,imgR)
+       pred_disp = test(imgL,imgR,sparse_disp_L)
        print('time = %.2f' %(time.time() - start_time))
 
        top_pad   = 384-imgL_o.shape[0]
        left_pad  = 1248-imgL_o.shape[1]
        img = pred_disp[top_pad:,:-left_pad]
        #skimage.io.imsave('outputs_img/'+test_left_img[inx].split('/')[-1],(img*256).astype('uint16'))
-       np.save(os.path.join('outputs_obj', test_left_img[inx].split('/')[-1].replace('.png', '')), img)
+       np.save(os.path.join('outputs_obj', dataloader.frame_ids[inx]+'.npy'), img)
 
 if __name__ == '__main__':
    main()
-
-
-
-
-
-
