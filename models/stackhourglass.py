@@ -158,8 +158,10 @@ class PSMNet(nn.Module):
         #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
         #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
         pred3 = disparityregression(self.maxdisp)(pred3)
+        #print('before:', pred3)
         # refine depth
         pred3 = self.refine_depth(left, pred3, sparse_disp)
+        #print('after:', pred3)
 
         if self.training:
             return pred1, pred2, pred3

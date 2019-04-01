@@ -141,7 +141,8 @@ class UpProj_Block(nn.Module):
         for h in range(0, oheight, 2):
             for w in range(0, owidth, 2):
                 mask[:,:,h,w] = 1
-        x = torch.mul(mask, x)
+        if self.oheight !=0 and self.owidth !=0:
+            x = torch.mul(mask, x)
         return x
 
     def forward(self, x):
@@ -173,7 +174,8 @@ class Simple_Gudi_UpConv_Block(nn.Module):
         for h in range(0, self.oheight, 2):
             for w in range(0, self.owidth, 2):
                 mask[:,:,h,w] = 1
-        x = torch.mul(mask, x)
+        if self.oheight !=0 and self.owidth !=0:
+            x = torch.mul(mask, x)
         return x
 
     def forward(self, x):
@@ -198,7 +200,8 @@ class Simple_Gudi_UpConv_Block_Last_Layer(nn.Module):
         for h in range(0, self.oheight, 2):
             for w in range(0, self.owidth, 2):
                 mask[:, :, h, w] = 1
-        x = torch.mul(mask, x)
+        if self.oheight !=0 and self.owidth !=0:
+            x = torch.mul(mask, x)
         return x
 
     def forward(self, x):
@@ -228,7 +231,8 @@ class Gudi_UpProj_Block(nn.Module):
         for h in range(0, self.oheight, 2):
             for w in range(0, self.owidth, 2):
                 mask[:,:,h,w] = 1
-        x = torch.mul(mask, x)
+        if self.oheight !=0 and self.owidth !=0:
+            x = torch.mul(mask, x)
         return x
 
     def forward(self, x):
@@ -265,7 +269,8 @@ class Gudi_UpProj_Block_Cat(nn.Module):
         for h in range(0, self.oheight, 2):
             for w in range(0, self.owidth, 2):
                 mask[:,:,h,w] = 1
-        x = torch.mul(mask, x)
+        if self.oheight !=0 and self.owidth !=0:
+            x = torch.mul(mask, x)
         return x
 
     def forward(self, x, side_input):
@@ -278,22 +283,6 @@ class Gudi_UpProj_Block_Cat(nn.Module):
         out += short_cut
         out = self.relu(out)
         return out
-
-def init_weights(m):
-    if isinstance(m, nn.Conv2d):
-        n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-        m.weight.data.normal_(0, math.sqrt(2. / n))
-    elif isinstance(m, nn.Conv3d):
-        n = m.kernel_size[0] * m.kernel_size[1]*m.kernel_size[2] * m.out_channels
-        m.weight.data.normal_(0, math.sqrt(2. / n))
-    elif isinstance(m, nn.BatchNorm2d):
-        m.weight.data.fill_(1)
-        m.bias.data.zero_()
-    elif isinstance(m, nn.BatchNorm3d):
-        m.weight.data.fill_(1)
-        m.bias.data.zero_()
-    elif isinstance(m, nn.Linear):
-        m.bias.data.zero_()
 
 class DepthRefineNet(nn.Module):
 
@@ -325,25 +314,6 @@ class DepthRefineNet(nn.Module):
         #self.gud_up_proj_layer5 = self._make_gud_up_conv_layer(Simple_Gudi_UpConv_Block_Last_Layer, 64, 1, 228, 304)
         # kernel
         self.gud_up_proj_layer6 = self._make_gud_up_conv_layer(Simple_Gudi_UpConv_Block_Last_Layer, 64, 8)
-        # init weights
-        self.apply(init_weights)
-        '''
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.Conv3d):
-                n = m.kernel_size[0] * m.kernel_size[1]*m.kernel_size[2] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm3d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                m.bias.data.zero_()
-        '''
 
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -402,7 +372,7 @@ class DepthRefineNet(nn.Module):
 
         guidance = self.gud_up_proj_layer6(x)
         # to avoid zero divide
-        guidance += torch.ones_like(guidance) * 0.01
+        #guidance += torch.ones_like(guidance) * 0.01
         #print('guidance:', guidance)
         #print('blurry_depth:', blurry_depth)
         #print('sparse_depth:', sparse_depth)

@@ -34,12 +34,21 @@ class myImageFloder(data.Dataset):
         self.training = training
 
     def get_sparse_disp(self, disp_L):
+        '''set some non zero disparity to zero'''
         w, h = disp_L.shape
-        sample_num = min(int(w * 0.8), int(h * 0.8))
-        ind_1 = np.random.choice(np.arange(w), replace=False,size=sample_num)
-        ind_2 = np.random.choice(np.arange(h), replace=False,size=sample_num)
+        valid_ind = np.where(disp_L!=0)
+        valid_ind = np.array(zip(valid_ind[0], valid_ind[1]))
+        # how many points to be set to 0
+        sample_num = int(len(valid_ind) * 0.7)
+        #print('origin: ', np.sum(disp_L!=0)/float(w*h))
+        ind = np.random.choice(range(0, len(valid_ind)), replace=False,size=sample_num)
+        sample_ind = valid_ind[ind]
         sparse_disp_L = np.copy(disp_L)
-        sparse_disp_L[ind_1,ind_2] = 0
+        y_ind = np.squeeze(sample_ind[:,0])
+        x_ind = np.squeeze(sample_ind[:,1])
+        print(np.sum(sparse_disp_L[y_ind,x_ind]==0))
+        sparse_disp_L[y_ind,x_ind] = 0
+        #print('sparse:', np.sum(sparse_disp_L!=0)/float(w*h))
         sparse_disp_L = np.expand_dims(sparse_disp_L, axis=0)
         return sparse_disp_L
 
@@ -68,7 +77,6 @@ class myImageFloder(data.Dataset):
            processed = preprocess.get_transform(augment=False)
            left_img   = processed(left_img)
            right_img  = processed(right_img)
-           print(dataL.shape)
            return left_img, right_img, dataL, self.get_sparse_disp(dataL)
         else:
            w, h = left_img.size

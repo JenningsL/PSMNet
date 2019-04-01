@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=5 && python finetune.py --maxdisp 192 \
+export CUDA_VISIBLE_DEVICES=0 && python finetune.py --maxdisp 192 \
                    --model stackhourglass \
                    --datatype 2015 \
                    --datapath /data/ssd/public/jlliu/scene_flow/training/ \

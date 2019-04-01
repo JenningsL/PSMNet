@@ -1,6 +1,7 @@
 from __future__ import print_function
 import argparse
 import os
+import sys
 import random
 import torch
 import torch.nn as nn
@@ -71,11 +72,10 @@ else:
 if args.cuda:
     model = nn.DataParallel(model)
     model.cuda()
-'''
+
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel)
-    model.load_state_dict(state_dict['state_dict'])
-'''
+    model.load_state_dict(state_dict['state_dict'], strict=False)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
@@ -128,6 +128,9 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             output3 = torch.squeeze(output3,1)
 
         pred_disp = output3.data.cpu()
+        #skimage.io.imsave('outputs_img/1.png',(torch.squeeze(pred_disp,0)*256).numpy().astype('uint16'))
+        #np.save(os.path.join('outputs_img', '1.npy'), torch.squeeze(pred_disp,0).numpy())
+        #sys.exit()
 
         #computing 3-px error#
         true_disp = disp_true
@@ -157,7 +160,7 @@ def main():
         total_train_loss = 0
         total_test_loss = 0
         adjust_learning_rate(optimizer,epoch)
-               ## training ##
+        ## training ##
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L, sparse_disp_crop_L) in enumerate(TrainImgLoader):
             start_time = time.time()
 
