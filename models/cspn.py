@@ -32,8 +32,14 @@ class Affinity_Propagate(nn.Module):
         gate7_w1_cmb = torch.abs(guidance.narrow(1,6,1))
         gate8_w1_cmb = torch.abs(guidance.narrow(1,7,1))
 
+        # WARNING: make sure blur_depth and sparse_depth are in the same scale
+        #sparse_depth = sparse_depth * 256;
         sparse_mask = sparse_depth.sign()
+        #print('sparse_depth:', sparse_depth.size())
+        #print('blur_depth:', blur_depth.size())
 
+        #print('mean blur_depth:', torch.sum(blur_depth)/torch.nonzero(blur_depth).size(0))
+        #print('mean sparse_depth:', torch.sum(sparse_depth)/torch.nonzero(sparse_depth).size(0))
         result_depth = (1- sparse_mask)*blur_depth.clone()+sparse_mask*sparse_depth
 
 
@@ -53,6 +59,7 @@ class Affinity_Propagate(nn.Module):
                                                 elewise_max_gate5, elewise_max_gate6, elewise_max_gate7, elewise_max_gate8)
             result_depth = (1- sparse_mask)*result_depth.clone()+sparse_mask*sparse_depth
 
+        #print('non zero process:', torch.mean(result_depth))
         return result_depth
 
 
@@ -73,6 +80,8 @@ class Affinity_Propagate(nn.Module):
         weight_sum = self.sum_conv(weight_matrix)
         avg_sum = self.avg_conv((weight_matrix*blur_matrix))
         out = (torch.div(weight_matrix, weight_sum))*blur_matrix + torch.div(avg_sum, weight_sum)
+        #print('1:', torch.div(weight_matrix, weight_sum))
+        #out = 1.0/8.0*blur_matrix + torch.div(avg_sum, weight_sum)
         return out
 
     def normalize_gate(self, guidance):

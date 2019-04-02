@@ -46,7 +46,6 @@ class myImageFloder(data.Dataset):
         sparse_disp_L = np.copy(disp_L)
         y_ind = np.squeeze(sample_ind[:,0])
         x_ind = np.squeeze(sample_ind[:,1])
-        print(np.sum(sparse_disp_L[y_ind,x_ind]==0))
         sparse_disp_L[y_ind,x_ind] = 0
         #print('sparse:', np.sum(sparse_disp_L!=0)/float(w*h))
         sparse_disp_L = np.expand_dims(sparse_disp_L, axis=0)

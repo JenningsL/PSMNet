@@ -73,8 +73,10 @@ class KITTIObjectLoader(data.Dataset):
         right_img = right_img.crop((w-1248, h-352, w, h))
         w1, h1 = left_img.size
 
+        # TODO: save and load sparse disparity as float, need to implement crop on numpy
         dataL = dataL.crop((w-1248, h-352, w, h))
-        dataL = np.ascontiguousarray(dataL,dtype=np.float32)/256
+        dataL = np.ascontiguousarray(dataL,dtype=np.float32)
+        #dataL = np.zeros_like(dataL, dtype=np.float32)
 
         processed = preprocess.get_transform(augment=False)
         left_img = processed(left_img)
@@ -88,5 +90,7 @@ class KITTIObjectLoader(data.Dataset):
 
 if __name__ == '__main__':
     loader = KITTIObjectLoader(sys.argv[1], sys.argv[2])
-    loader.generate_sparse_disparity()
+    #loader.generate_sparse_disparity()
     print(loader[0])
+    disp = loader[0][2]
+    print(torch.FloatTensor(disp).sign())

@@ -371,11 +371,7 @@ class DepthRefineNet(nn.Module):
         #x= self.gud_up_proj_layer5(x)
 
         guidance = self.gud_up_proj_layer6(x)
-        # to avoid zero divide
-        #guidance += torch.ones_like(guidance) * 0.01
-        #print('guidance:', guidance)
-        #print('blurry_depth:', blurry_depth)
-        #print('sparse_depth:', sparse_depth)
+        blurry_depth = torch.unsqueeze(blurry_depth, 1)
         x = self.post_process_layer(guidance, blurry_depth, sparse_depth)
 
         return x

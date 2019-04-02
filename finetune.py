@@ -122,7 +122,6 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
         sparse_disp_L = Variable(torch.FloatTensor(sparse_disp_L))
         if args.cuda:
             imgL, imgR, disp_true_sparse = imgL.cuda(), imgR.cuda(), sparse_disp_L.cuda()
-
         with torch.no_grad():
             output3 = model(imgL,imgR, disp_true_sparse)
             output3 = torch.squeeze(output3,1)
@@ -169,7 +168,6 @@ def main():
             total_train_loss += loss
         print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
         ## Test ##
-
         for batch_idx, (imgL, imgR, disp_L, sparse_disp_L) in enumerate(TestImgLoader):
             test_loss = test(imgL,imgR, disp_L, sparse_disp_L)
             print('Iter %d 3-px error in val = %.3f' %(batch_idx, test_loss*100))

@@ -18,15 +18,13 @@ import time
 import math
 from utils import preprocess
 from models import *
-from dataloader import KITTIObjectLoader
+from dataloader.KITTIObjectLoader import KITTIObjectLoader
 
 # 2012 data /media/jiaren/ImageNet/data_scene_flow_2012/testing/
 
 parser = argparse.ArgumentParser(description='PSMNet')
-parser.add_argument('--kitti_path', default='2015',
+parser.add_argument('--kitti_path', default='./Kitti/object',
                     help='KITTI version')
-parser.add_argument('--datapath', default='/media/jiaren/ImageNet/data_scene_flow_2015/testing/',
-                    help='select model')
 parser.add_argument('--loadmodel', default=None,
                     help='loading model')
 parser.add_argument('--model', default='stackhourglass',
@@ -71,7 +69,6 @@ def test(imgL,imgR, sparse_disp_L):
            sparse_disp_L = torch.FloatTensor(sparse_disp_L).cuda()
 
         imgL, imgR, sparse_disp_L = Variable(imgL), Variable(imgR), Variable(sparse_disp_L)
-
         with torch.no_grad():
             output = model(imgL,imgR, sparse_disp_L)
         output = torch.squeeze(output)
@@ -87,8 +84,8 @@ def main():
        imgL_o, imgR_o, sparse_disp_L = dataloader[inx]
        # imgL_o = (skimage.io.imread(test_left_img[inx]).astype('float32'))
        # imgR_o = (skimage.io.imread(test_right_img[inx]).astype('float32'))
-       imgL = processed(imgL_o).numpy()
-       imgR = processed(imgR_o).numpy()
+       imgL = imgL_o.numpy()
+       imgR = imgR_o.numpy()
        imgL = np.reshape(imgL,[1,3,imgL.shape[1],imgL.shape[2]])
        imgR = np.reshape(imgR,[1,3,imgR.shape[1],imgR.shape[2]])
        sparse_disp_L = np.reshape(sparse_disp_L,[1,1,sparse_disp_L.shape[0],sparse_disp_L.shape[1]])
@@ -102,13 +99,13 @@ def main():
 
        start_time = time.time()
        pred_disp = test(imgL,imgR,sparse_disp_L)
-       print('time = %.2f' %(time.time() - start_time))
+       print('%s: time = %.2f' %(dataloader.frame_ids[inx], time.time() - start_time))
 
        top_pad   = 384-imgL_o.shape[0]
        left_pad  = 1248-imgL_o.shape[1]
-       img = pred_disp[top_pad:,:-left_pad]
+       #img = pred_disp[top_pad:,:-left_pad]
        #skimage.io.imsave('outputs_img/'+test_left_img[inx].split('/')[-1],(img*256).astype('uint16'))
-       np.save(os.path.join('outputs_obj', dataloader.frame_ids[inx]+'.npy'), img)
+       np.save(os.path.join('outputs_obj', dataloader.frame_ids[inx]+'.npy'), pred_disp)
 
 if __name__ == '__main__':
    main()
