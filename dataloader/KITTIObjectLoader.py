@@ -9,16 +9,30 @@ from PIL import Image, ImageOps
 import cv2
 import numpy as np
 import preprocess
+import time
+import functools
+import traceback
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'kitti'))
 import kitti_util
 from kitti_object import *
+import psutil
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
     '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP',
 ]
+
+def trace_unhandled_exceptions(func):
+    @functools.wraps(func)
+    def wrapped_func(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except:
+            print 'Exception in '+func.__name__
+            traceback.print_exc()
+    return wrapped_func
 
 class KITTIObjectLoader(data.Dataset):
     def __init__(self, kitti_path, split):
@@ -34,10 +48,25 @@ class KITTIObjectLoader(data.Dataset):
         with open(os.path.join(self.kitti_path, split + '.txt')) as f:
             return [line.rstrip('\n') for line in f]
 
-    def generate_sparse_disparity(self):
+    def filter_occlusion(self, disp):
+        def is_occluded(disp, x, y, r=8):
+            for u in range(max(x-r, 0), min(x+r, disp.shape[1])):
+                for v in range(max(y-r, 0), min(y+r, disp.shape[0])):
+                    if disp[v][u] - disp[y][x] > 5:
+                        return True
+        for y in range(disp.shape[0]):
+            for x in range(disp.shape[1]):
+                if disp[y][x] < 5:
+                    continue
+                if is_occluded(disp, x, y):
+                    disp[y][x] = 0
+
+    @trace_unhandled_exceptions
+    def generate_sparse_disparity(self, start, end):
         if not os.path.isdir(self.disp_dir):
             os.mkdir(self.disp_dir)
-        for frame_id in self.frame_ids:
+        for frame_id in self.frame_ids[start:end]:
+            print(frame_id)
             data_idx = int(frame_id)
             pc_velo = self.kitti_dataset.get_lidar(data_idx)
             calib = self.kitti_dataset.get_calibration(data_idx) # 3 by 4 matrix
@@ -55,8 +84,14 @@ class KITTIObjectLoader(data.Dataset):
                 if u < 0 or u >= img_width or v < 0 or v >= img_height:
                     continue
                 disp_L[v][u] = calib.P[0][0] * self.baseline / pc_rect[i][2]
+            start = time.time()
+            self.filter_occlusion(disp_L)
+            print(time.time() - start)
             fname = os.path.join(self.disp_dir, '{:06}.npy'.format(data_idx))
             np.save(fname, disp_L)
+            # color_disp = cv2.applyColorMap(np.minimum(256, disp_L*2).astype(np.uint8), cv2.COLORMAP_JET)
+            # cv2.imshow('disp', color_disp)
+            # cv2.waitKey(0)
             # fname = os.path.join(self.disp_dir, '{:06}.png'.format(data_idx))
             # cv2.imwrite(fname, disp_L.astype(np.int32))
 
@@ -96,9 +131,29 @@ class KITTIObjectLoader(data.Dataset):
         return len(self.frame_ids)
 
 
+def process_range(kitti_path, split, start, end):
+    loader = KITTIObjectLoader(kitti_path, split)
+    loader.generate_sparse_disparity(start, end)
+
 if __name__ == '__main__':
+    from multiprocessing import Pool
+    import math
     loader = KITTIObjectLoader(sys.argv[1], sys.argv[2])
-    loader.generate_sparse_disparity()
+    p = Pool()
+    worker_num = psutil.cpu_count()
+    print('Found %d core' % worker_num)
+    assert(len(loader) > worker_num)
+    batch = int(math.ceil(len(loader) / float(worker_num)))
+    results = []
+    for i in range(worker_num):
+        start = i * batch
+        end = min(len(loader), (i+1) * batch)
+        p.apply_async(process_range, args=(sys.argv[1], sys.argv[2], start, end))
+    print 'Waiting for all subprocesses done...'
+    p.close()
+    p.join()
+    print 'Done'
+    # loader.generate_sparse_disparity()
     # print(loader[0])
     # disp = loader[0][2]
     # print(torch.FloatTensor(disp).sign())
