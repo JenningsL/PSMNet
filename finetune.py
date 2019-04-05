@@ -56,11 +56,11 @@ all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_
 
 TrainImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True),
-         batch_size= 1, shuffle= True, num_workers= 8, drop_last=False)
+         batch_size=2, shuffle= True, num_workers= 8, drop_last=False)
 
 TestImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False),
-         batch_size= 1, shuffle= False, num_workers= 4, drop_last=False)
+         batch_size=2, shuffle= False, num_workers= 4, drop_last=False)
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
@@ -79,7 +79,8 @@ if args.loadmodel is not None:
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
+#optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
+optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.1, betas=(0.9, 0.999))
 
 def train(imgL,imgR,disp_L,sparse_disp_L):
         model.train()
@@ -135,7 +136,9 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
         true_disp = disp_true
         index = np.argwhere(true_disp>0)
         disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
-        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)
+        max_pixel_err = 1 #3
+        max_ratio_err = 0.02 #0.05
+        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < max_pixel_err)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*max_ratio_err)
         torch.cuda.empty_cache()
 
         return 1-(float(torch.sum(correct))/float(len(index[0])))
