@@ -57,7 +57,7 @@ class PSMNet(nn.Module):
 
         self.feature_extraction = feature_extraction()
 
-        self.refine_depth = DepthRefineNet(Bottleneck, [2, 2, 2, 2], UpProj_Block)
+        self.refine_depth = DepthRefineNet(BasicBlock, [2, 2, 2, 2], UpProj_Block)
 
         self.dres0 = nn.Sequential(convbn_3d(64, 32, 3, 1, 1),
                                      nn.ReLU(inplace=True),
