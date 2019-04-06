@@ -14,10 +14,13 @@ import functools
 import traceback
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
+sys.path.append(ROOT_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'kitti'))
 import kitti_util
 from kitti_object import *
 import psutil
+from data_util import get_sparse_disp
+from utils.vis import visualize_disparity
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -124,6 +127,9 @@ class KITTIObjectLoader(data.Dataset):
         processed = preprocess.get_transform(augment=False)
         left_img = processed(left_img)
         right_img = processed(right_img)
+        # sparse = get_sparse_disp(dataL, erase_ratio=0.9)
+        # visualize_disparity(dataL)
+        # visualize_disparity(sparse)
 
         return left_img, right_img, dataL
 
