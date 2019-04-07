@@ -17,10 +17,6 @@ import skimage.transform
 import numpy as np
 import time
 import math
-#from dataloader import KITTIloader2015 as ls
-#from dataloader import KITTILoader as DA
-from dataloader import listflowfile as ls
-from dataloader import SecenFlowLoader as DA
 
 from models import *
 
@@ -29,8 +25,8 @@ parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
 parser.add_argument('--model', default='stackhourglass',
                     help='select model')
-parser.add_argument('--datatype', default='2015',
-                    help='datapath')
+parser.add_argument('--datatype', default='kitti_2015',
+                    help='datatype, sceneflow, kitti_2015, kitti_2012')
 parser.add_argument('--datapath', default='/media/jiaren/ImageNet/data_scene_flow_2015/training/',
                     help='datapath')
 parser.add_argument('--epochs', type=int, default=300,
@@ -49,12 +45,19 @@ torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-'''
-if args.datatype == '2015':
-   from dataloader import KITTIloader2015 as ls
-elif args.datatype == '2012':
-   from dataloader import KITTIloader2012 as ls
-'''
+if args.datatype == 'kitti_2015':
+    from dataloader import KITTIloader2015 as ls
+    from dataloader import KITTILoader as DA
+elif args.datatype == 'kitti_2012':
+    from dataloader import KITTIloader2012 as ls
+    from dataloader import KITTILoader as DA
+elif args.datatype == 'sceneflow':
+    from dataloader import listflowfile as ls
+    from dataloader import SecenFlowLoader as DA
+else:
+    print('unknown datatype: ', args.datatype)
+    sys.exit()
+
 all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
 
 TrainImgLoader = torch.utils.data.DataLoader(
@@ -82,7 +85,7 @@ if args.loadmodel is not None:
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
 #optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
-optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.01, betas=(0.9, 0.999))
+optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.001, betas=(0.9, 0.999))
 
 def train(imgL,imgR,disp_L,sparse_disp_L):
         model.train()
@@ -134,16 +137,27 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
         #np.save(os.path.join('outputs_img', '1.npy'), torch.squeeze(pred_disp,0).numpy())
         #sys.exit()
 
-        #computing 3-px error#
-        true_disp = disp_true
-        index = np.argwhere(true_disp>0)
-        disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
-        max_pixel_err = 3 #3
-        max_ratio_err = 0.05 #0.05
-        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < max_pixel_err)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*max_ratio_err)
-        torch.cuda.empty_cache()
+        #computing 3-px error for kitti#
+        if 'kitti' in args.datatype:
+            true_disp = disp_true
+            index = np.argwhere(true_disp>0)
+            disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
+            max_pixel_err = 3 #3
+            max_ratio_err = 0.05 #0.05
+            correct = (disp_true[index[0][:], index[1][:], index[2][:]] < max_pixel_err)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*max_ratio_err)
+            torch.cuda.empty_cache()
 
-        return 1-(float(torch.sum(correct))/float(len(index[0])))
+            return 1-(float(torch.sum(correct))/float(len(index[0])))
+        else:
+            # end-point-error for sceneflow
+            output = pred_disp[:,4:,:]
+            mask = disp_true < 192
+            if len(disp_true[mask])==0:
+               loss = 0
+            else:
+               loss = torch.mean(torch.abs(output[mask]-disp_true[mask]))
+
+            return loss
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
@@ -175,15 +189,20 @@ def main():
         ## Test ##
         for batch_idx, (imgL, imgR, disp_L, sparse_disp_L) in enumerate(TestImgLoader):
             test_loss = test(imgL,imgR, disp_L, sparse_disp_L)
-            print('Iter %d 3-px error in val = %.3f' %(batch_idx, test_loss*100))
+            if 'kitti' in args.datatype:
+                print('Iter %d 3-px error in val = %.3f' %(batch_idx, test_loss*100))
+            else:
+                print('Iter %d endpoint err in val = %.3f' %(batch_idx, test_loss))
             total_test_loss += test_loss
 
-
-        print('epoch %d total 3-px error in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
-        if total_test_loss/len(TestImgLoader)*100 > max_acc:
-            max_acc = total_test_loss/len(TestImgLoader)*100
-            max_epo = epoch
-        print('MAX epoch %d total test error = %.3f' %(max_epo, max_acc))
+        if 'kitti' in args.datatype:
+            print('epoch %d total 3-px error in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+            if total_test_loss/len(TestImgLoader)*100 > max_acc:
+                max_acc = total_test_loss/len(TestImgLoader)*100
+                max_epo = epoch
+            print('MAX epoch %d total test error = %.3f' %(max_epo, max_acc))
+        else:
+            print('total test loss = %.3f' %(total_test_loss/len(TestImgLoader)))
 
         #SAVE
         savefilename = args.savemodel+'finetune_'+str(epoch)+'.tar'
@@ -191,7 +210,7 @@ def main():
             'epoch': epoch,
             'state_dict': model.state_dict(),
             'train_loss': total_train_loss/len(TrainImgLoader),
-            'test_loss': total_test_loss/len(TestImgLoader)*100,
+            'test_loss': total_test_loss/len(TestImgLoader)*100 if 'kitti' in args.datatype else total_test_loss/len(TestImgLoader),
         }, savefilename)
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
     print(max_epo)
