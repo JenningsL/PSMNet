@@ -346,6 +346,7 @@ class DepthRefineNet(nn.Module):
         [batch_size, channel, height, width] = x.size()
         # input is rgbd
         #sparse_depth = x.narrow(1,3,1).clone() # sparse ground truth
+        sparse_depth = torch.unsqueeze(sparse_depth, 1)
 
         x = self.conv1_1(x)
         skip4 = x
@@ -371,6 +372,7 @@ class DepthRefineNet(nn.Module):
         #x= self.gud_up_proj_layer5(x)
 
         guidance = self.gud_up_proj_layer6(x)
+        guidance += 0.0000001
         blurry_depth = torch.unsqueeze(blurry_depth, 1)
         x = self.post_process_layer(guidance, blurry_depth, sparse_depth)
 

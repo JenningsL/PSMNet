@@ -3,6 +3,7 @@ import torch.utils.data as data
 from PIL import Image
 import os
 import os.path
+import random
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -19,18 +20,19 @@ def dataloader(filepath):
  image = [img for img in classes if img.find('frames_cleanpass') > -1]
  disp  = [dsp for dsp in classes if dsp.find('disparity') > -1]
 
- monkaa_path = filepath + [x for x in image if 'monkaa' in x][0]
- monkaa_disp = filepath + [x for x in disp if 'monkaa' in x][0]
-
- 
- monkaa_dir  = os.listdir(monkaa_path)
-
  all_left_img=[]
  all_right_img=[]
  all_left_disp = []
  test_left_img=[]
  test_right_img=[]
  test_left_disp = []
+
+ '''
+ monkaa_path = filepath + [x for x in image if 'monkaa' in x][0]
+ monkaa_disp = filepath + [x for x in disp if 'monkaa' in x][0]
+
+
+ monkaa_dir  = os.listdir(monkaa_path)
 
 
  for dd in monkaa_dir:
@@ -79,7 +81,7 @@ def dataloader(filepath):
 
        if is_image_file(flying_dir+ss+'/'+ff+'/right/'+im):
          test_right_img.append(flying_dir+ss+'/'+ff+'/right/'+im)
-
+ '''
 
 
  driving_dir = filepath + [x for x in image if 'driving' in x][0] + '/'
@@ -92,7 +94,7 @@ def dataloader(filepath):
  for i in subdir1:
    for j in subdir2:
     for k in subdir3:
-        imm_l = os.listdir(driving_dir+i+'/'+j+'/'+k+'/left/')    
+        imm_l = os.listdir(driving_dir+i+'/'+j+'/'+k+'/left/')
         for im in imm_l:
           if is_image_file(driving_dir+i+'/'+j+'/'+k+'/left/'+im):
             all_left_img.append(driving_dir+i+'/'+j+'/'+k+'/left/'+im)
@@ -101,7 +103,16 @@ def dataloader(filepath):
           if is_image_file(driving_dir+i+'/'+j+'/'+k+'/right/'+im):
             all_right_img.append(driving_dir+i+'/'+j+'/'+k+'/right/'+im)
 
-
+ total = len(all_left_img)
+ inds = range(total)
+ random.shuffle(inds)
+ train_size = int(0.8 * total)
+ test_left_img = all_left_img[train_size:]
+ test_right_img = all_right_img[train_size:]
+ test_left_disp = all_left_disp[train_size:]
+ all_left_img = all_left_img[:train_size]
+ all_right_img = all_right_img[:train_size]
+ all_left_disp = all_left_disp[:train_size]
  return all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp
 
 
