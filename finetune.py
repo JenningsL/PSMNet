@@ -56,18 +56,28 @@ elif args.datatype == 'kitti_2012':
 elif args.datatype == 'sceneflow':
     from dataloader import listflowfile as ls
     from dataloader import SecenFlowLoader as DA
+elif args.datatype == 'kitti_object':
+    from dataloader.KITTIObjectLoader import KITTIObjectLoader
 else:
     print('unknown datatype: ', args.datatype)
     sys.exit()
 
-all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
+if args.datatype != 'kitti_object':
+    all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
+    TrainImgLoader = torch.utils.data.DataLoader(
+             DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True),
+             batch_size=8, shuffle=True, num_workers=8, drop_last=False)
+    TestImgLoader = torch.utils.data.DataLoader(
+             DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False),
+             batch_size=4, shuffle=False, num_workers=4, drop_last=False)
+else:
+    TrainImgLoader = torch.utils.data.DataLoader(
+             KITTIObjectLoader(args.datapath, 'train', training=True),
+             batch_size=8, shuffle=True, num_workers=8, drop_last=False)
+    TestImgLoader = torch.utils.data.DataLoader(
+             KITTIObjectLoader(args.datapath, 'val', training=True),
+             batch_size=4, shuffle=False, num_workers=4, drop_last=False)
 
-TrainImgLoader = torch.utils.data.DataLoader(
-         DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True),
-         batch_size=8, shuffle= True, num_workers= 8, drop_last=False)
-TestImgLoader = torch.utils.data.DataLoader(
-         DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False),
-         batch_size=4, shuffle= False, num_workers= 4, drop_last=False)
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)

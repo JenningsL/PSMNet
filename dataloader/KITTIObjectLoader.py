@@ -19,7 +19,7 @@ sys.path.append(os.path.join(ROOT_DIR, 'kitti'))
 import kitti_util
 from kitti_object import *
 import psutil
-from data_util import get_sparse_disp
+from data_util import get_sparse_disp, crop_np_matrix
 from utils.vis import visualize_disparity
 
 IMG_EXTENSIONS = [
@@ -38,13 +38,14 @@ def trace_unhandled_exceptions(func):
     return wrapped_func
 
 class KITTIObjectLoader(data.Dataset):
-    def __init__(self, kitti_path, split):
+    def __init__(self, kitti_path, split, training=False):
         self.kitti_path = kitti_path
         self.kitti_dataset = kitti_object(kitti_path, 'training')
         self.left_dir = os.path.join(self.kitti_path, 'training', 'image_2')
         self.right_dir = os.path.join(self.kitti_path, 'training', 'image_3')
         self.disp_dir = os.path.join(self.kitti_path, 'training/disparity')
         self.frame_ids = self.load_split_ids(split)
+        self.training = training
         self.baseline = 0.5379
 
     def load_split_ids(self, split):
@@ -108,30 +109,45 @@ class KITTIObjectLoader(data.Dataset):
         # dataL = Image.open(disp_L)
         dataL = np.load(disp_L)
 
-        target_w = 1248
-        target_h = 352
-        w, h = left_img.size
+        if self.training:
+            w, h = left_img.size
+            th, tw = 256, 512
 
-        # this will add zero padding
-        left_img = left_img.crop((w-target_w, h-target_h, w, h))
-        right_img = right_img.crop((w-target_w, h-target_h, w, h))
-        w1, h1 = left_img.size
+            x1 = random.randint(0, w - tw)
+            y1 = random.randint(0, h - th)
 
-        # load sparse disparity as float, need to implement crop on numpy
-        # print('origin size: ', dataL.shape)
-        dataL = np.pad(dataL, ((max(target_h-h, 0), 0), (max(target_w-w, 0), 0)), 'constant', constant_values=0)
-        # print('after padding: ', dataL.shape)
-        dataL = dataL[max(dataL.shape[0]-target_h, 0):dataL.shape[0], max(dataL.shape[1]-target_w, 0):dataL.shape[1]]
-        # print('after crop: ', dataL.shape)
+            left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
+            right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
-        processed = preprocess.get_transform(augment=False)
-        left_img = processed(left_img)
-        right_img = processed(right_img)
-        # sparse = get_sparse_disp(dataL, erase_ratio=0.9)
-        # visualize_disparity(dataL)
-        # visualize_disparity(sparse)
+            dataL = crop_np_matrix(dataL, th, tw)
 
-        return left_img, right_img, dataL
+            processed = preprocess.get_transform(augment=False)
+            left_img   = processed(left_img)
+            right_img  = processed(right_img)
+
+            # visualize_disparity(dataL)
+            return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
+
+        else:
+            target_w = 1248
+            target_h = 352
+            w, h = left_img.size
+
+            # this will add zero padding
+            left_img = left_img.crop((w-target_w, h-target_h, w, h))
+            right_img = right_img.crop((w-target_w, h-target_h, w, h))
+            w1, h1 = left_img.size
+
+            dataL = crop_np_matrix(dataL, target_h, target_w)
+
+            processed = preprocess.get_transform(augment=False)
+            left_img = processed(left_img)
+            right_img = processed(right_img)
+            # sparse = get_sparse_disp(dataL, erase_ratio=0.9)
+            visualize_disparity(dataL)
+            # visualize_disparity(sparse)
+
+            return left_img, right_img, dataL
 
     def __len__(self):
         return len(self.frame_ids)
@@ -142,24 +158,23 @@ def process_range(kitti_path, split, start, end):
     loader.generate_sparse_disparity(start, end)
 
 if __name__ == '__main__':
-    from multiprocessing import Pool
-    import math
-    loader = KITTIObjectLoader(sys.argv[1], sys.argv[2])
-    p = Pool()
-    worker_num = psutil.cpu_count()
-    print('Found %d core' % worker_num)
-    assert(len(loader) > worker_num)
-    batch = int(math.ceil(len(loader) / float(worker_num)))
-    results = []
-    for i in range(worker_num):
-        start = i * batch
-        end = min(len(loader), (i+1) * batch)
-        p.apply_async(process_range, args=(sys.argv[1], sys.argv[2], start, end))
-    print 'Waiting for all subprocesses done...'
-    p.close()
-    p.join()
-    print 'Done'
-    # loader.generate_sparse_disparity()
-    # print(loader[0])
-    # disp = loader[0][2]
-    # print(torch.FloatTensor(disp).sign())
+    # from multiprocessing import Pool
+    # import math
+    # loader = KITTIObjectLoader(sys.argv[1], sys.argv[2])
+    # p = Pool()
+    # worker_num = psutil.cpu_count()
+    # print('Found %d core' % worker_num)
+    # assert(len(loader) > worker_num)
+    # batch = int(math.ceil(len(loader) / float(worker_num)))
+    # results = []
+    # for i in range(worker_num):
+    #     start = i * batch
+    #     end = min(len(loader), (i+1) * batch)
+    #     p.apply_async(process_range, args=(sys.argv[1], sys.argv[2], start, end))
+    # print 'Waiting for all subprocesses done...'
+    # p.close()
+    # p.join()
+    # print 'Done'
+
+    loader = KITTIObjectLoader(sys.argv[1], sys.argv[2], training=True)
+    print(loader[0])

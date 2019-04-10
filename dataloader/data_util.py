@@ -18,3 +18,12 @@ def get_sparse_disp(disp_L, erase_ratio=0.7):
     #print('sparse:', np.sum(sparse_disp_L!=0)/float(w*h))
     # sparse_disp_L = np.expand_dims(sparse_disp_L, axis=0)
     return sparse_disp_L
+
+def crop_np_matrix(dataL, target_h, target_w):
+    w, h = dataL.shape
+    # print('origin size: ', dataL.shape)
+    dataL = np.pad(dataL, ((max(target_h-h, 0), 0), (max(target_w-w, 0), 0)), 'constant', constant_values=0)
+    # print('after padding: ', dataL.shape)
+    dataL = dataL[max(dataL.shape[0]-target_h, 0):dataL.shape[0], max(dataL.shape[1]-target_w, 0):dataL.shape[1]]
+    # print('after crop: ', dataL.shape)
+    return dataL
