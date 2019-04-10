@@ -132,11 +132,11 @@ class UpProj_Block(nn.Module):
         if self.oheight == 0 and self.owidth == 0:
             oheight = scale * x.size(2)
             owidth = scale * x.size(3)
-            x = nn.Upsample(scale_factor=scale, mode='nearest')(x)
+            x = nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True)(x)
         else:
             oheight = self.oheight
             owidth = self.owidth
-            x = nn.Upsample(size=(oheight, owidth), mode='nearest')(x)
+            x = nn.Upsample(size=(oheight, owidth), mode='bilinear', align_corners=True)(x)
         mask = torch.zeros_like(x)
         for h in range(0, oheight, 2):
             for w in range(0, owidth, 2):
@@ -166,7 +166,7 @@ class Simple_Gudi_UpConv_Block(nn.Module):
 
     def _up_pooling(self, x, scale):
 
-        x = nn.Upsample(scale_factor=scale, mode='nearest')(x)
+        x = nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True)(x)
         if self.oheight !=0 and self.owidth !=0:
             x = x.narrow(2,0,self.oheight)
             x = x.narrow(3,0,self.owidth)
@@ -192,7 +192,7 @@ class Simple_Gudi_UpConv_Block_Last_Layer(nn.Module):
 
     def _up_pooling(self, x, scale):
 
-        x = nn.Upsample(scale_factor=scale, mode='nearest')(x)
+        x = nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True)(x)
         if self.oheight != 0 and self.owidth != 0:
             x = x.narrow(2, 0, self.oheight)
             x = x.narrow(3, 0, self.owidth)
@@ -224,7 +224,7 @@ class Gudi_UpProj_Block(nn.Module):
 
     def _up_pooling(self, x, scale):
 
-        x = nn.Upsample(scale_factor=scale, mode='nearest')(x)
+        x = nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True)(x)
         if self.oheight !=0 and self.owidth !=0:
             x = x[:,:,0:self.oheight, 0:self.owidth]
         mask = torch.zeros_like(x)
@@ -262,7 +262,7 @@ class Gudi_UpProj_Block_Cat(nn.Module):
 
     def _up_pooling(self, x, scale):
 
-        x = nn.Upsample(scale_factor=scale, mode='nearest')(x)
+        x = nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=True)(x)
         if self.oheight !=0 and self.owidth !=0:
             x = x[:,:,0:self.oheight, 0:self.owidth]
         mask = torch.zeros_like(x)
@@ -372,7 +372,7 @@ class DepthRefineNet(nn.Module):
         #x= self.gud_up_proj_layer5(x)
 
         guidance = self.gud_up_proj_layer6(x)
-        guidance += 0.0000001
+        guidance += 0.000000001
         blurry_depth = torch.unsqueeze(blurry_depth, 1)
         x = self.post_process_layer(guidance, blurry_depth, sparse_depth)
 
@@ -384,10 +384,10 @@ def resnet18(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], UpProj_Block, **kwargs)
+    model = DepthRefineNet(BasicBlock, [2, 2, 2, 2], UpProj_Block, **kwargs)
     if pretrained:
         print('==> Load pretrained model..')
-        pretrained_dict = torch.load(model_path['resnet18'])
+        pretrained_dict = model_zoo.load_url(model_urls['resnet18'])
         model.load_state_dict(update_model.update_model(model, pretrained_dict))
     return model
 
@@ -397,9 +397,10 @@ def resnet34(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], UpProj_Block, **kwargs)
+    model = DepthRefineNet(BasicBlock, [3, 4, 6, 3], UpProj_Block, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34']))
+        pretrained_dict = model_zoo.load_url(model_urls['resnet34'])
+        model.load_state_dict(update_model.update_model(model, pretrained_dict))
     return model
 
 
@@ -408,10 +409,10 @@ def resnet50(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], UpProj_Block, **kwargs)
+    model = DepthRefineNet(Bottleneck, [3, 4, 6, 3], UpProj_Block, **kwargs)
     if pretrained:
         print('==> Load pretrained model..')
-        pretrained_dict = torch.load(model_path['resnet50'])
+        pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
         model.load_state_dict(update_model.update_model(model, pretrained_dict))
     return model
 
@@ -421,9 +422,11 @@ def resnet101(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], UpProj_Block, **kwargs)
+    model = DepthRefineNet(Bottleneck, [3, 4, 23, 3], UpProj_Block, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
+        print('==> Load pretrained model..')
+        pretrained_dict = model_zoo.load_url(model_urls['resnet101'])
+        model.load_state_dict(update_model.update_model(model, pretrained_dict))
     return model
 
 
@@ -432,8 +435,10 @@ def resnet152(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], UpProj_Block, **kwargs)
+    model = DepthRefineNet(Bottleneck, [3, 8, 36, 3], UpProj_Block, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+        print('==> Load pretrained model..')
+        pretrained_dict = model_zoo.load_url(model_urls['resnet152'])
+        model.load_state_dict(update_model.update_model(model, pretrained_dict))
     return model
 

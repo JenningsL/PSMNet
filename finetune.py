@@ -11,9 +11,9 @@ import torch.optim as optim
 import torch.utils.data
 from torch.autograd import Variable
 import torch.nn.functional as F
-import skimage
-import skimage.io
-import skimage.transform
+#import skimage
+#import skimage.io
+#import skimage.transform
 import numpy as np
 import time
 import math
@@ -33,6 +33,8 @@ parser.add_argument('--epochs', type=int, default=300,
                     help='number of epochs to train')
 parser.add_argument('--loadmodel', default='./trained/submission_model.tar',
                     help='load model')
+parser.add_argument('--loadmodel_refine', default=None,
+                    help='load refine model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -62,10 +64,10 @@ all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_
 
 TrainImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True),
-         batch_size=2, shuffle= True, num_workers= 8, drop_last=False)
+         batch_size=8, shuffle= True, num_workers= 8, drop_last=False)
 TestImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False),
-         batch_size=2, shuffle= False, num_workers= 4, drop_last=False)
+         batch_size=4, shuffle= False, num_workers= 4, drop_last=False)
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
@@ -74,21 +76,31 @@ elif args.model == 'basic':
 else:
     print('no model')
 
+refine_model = unet_refine.resnet34(pretrained=True)
+
 if args.cuda:
     model = nn.DataParallel(model)
     model.cuda()
+    refine_model = nn.DataParallel(refine_model)
+    refine_model.cuda()
 
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel)
-    model.load_state_dict(state_dict['state_dict'], strict=False)
+    #pretrained_dict = {k:v for k,v in state_dict1['state_dict'].items() if 'refine_depth' not in k}
+    model.load_state_dict(state_dict['state_dict'])
+if args.loadmodel_refine is not None:
+    print('Loading refine model')
+    state_dict = torch.load(args.loadmodel_refine)
+    refine_model.load_state_dict(state_dict)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-#optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
-optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.001, betas=(0.9, 0.999))
+optimizer = optim.Adam(refine_model.parameters(), lr=0.001, betas=(0.9, 0.999))
+#optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.001, betas=(0.9, 0.999))
 
 def train(imgL,imgR,disp_L,sparse_disp_L):
         model.train()
+        refine_model.train()
         imgL   = Variable(torch.FloatTensor(imgL))
         imgR   = Variable(torch.FloatTensor(imgR))
         sparse_disp_L = Variable(torch.FloatTensor(sparse_disp_L))
@@ -104,11 +116,17 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
 
         optimizer.zero_grad()
         if args.model == 'stackhourglass':
-            output1, output2, output3 = model(imgL,imgR,disp_true_sparse)
+            with torch.no_grad():
+                output1, output2, output3 = model(imgL,imgR,disp_true_sparse)
+            output1 = refine_model(imgL, output1, disp_true_sparse)
+            output2 = refine_model(imgL, output2, disp_true_sparse)
+            output3 = refine_model(imgL, output3, disp_true_sparse)
             output1 = torch.squeeze(output1,1)
             output2 = torch.squeeze(output2,1)
             output3 = torch.squeeze(output3,1)
             #print(output1, output2, output3)
+            #if np.isnan(np.min(output1)) or np.isnan(np.min(output2)) or np.isnan(np.min(output3)):
+            #    print('nan in output!')
             loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) + 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) + F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True)
         elif args.model == 'basic':
             output = model(imgL,imgR)
@@ -123,22 +141,29 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
 
 def test(imgL,imgR,disp_true, sparse_disp_L):
         model.eval()
+        refine_model.eval()
         imgL   = Variable(torch.FloatTensor(imgL))
         imgR   = Variable(torch.FloatTensor(imgR))
+        # dont use pixel with sparse disp for evaluation
+        without_sparse_mask = sparse_disp_L == 0 # (4, 544, 960)
+        disp_true *= without_sparse_mask.float()
         sparse_disp_L = Variable(torch.FloatTensor(sparse_disp_L))
         if args.cuda:
             imgL, imgR, disp_true_sparse = imgL.cuda(), imgR.cuda(), sparse_disp_L.cuda()
         with torch.no_grad():
             output3 = model(imgL,imgR, disp_true_sparse)
+            output3 = refine_model(imgL, output3, disp_true_sparse)
             output3 = torch.squeeze(output3,1)
 
         pred_disp = output3.data.cpu()
         #skimage.io.imsave('outputs_img/1.png',(torch.squeeze(pred_disp,0)*256).numpy().astype('uint16'))
-        #np.save(os.path.join('outputs_img', '1.npy'), torch.squeeze(pred_disp,0).numpy())
+        #print(pred_disp[0])
+        #np.save('test.npy', pred_disp)
         #sys.exit()
 
         #computing 3-px error for kitti#
         if 'kitti' in args.datatype:
+            #true_disp = np.copy(disp_true)
             true_disp = disp_true
             index = np.argwhere(true_disp>0)
             disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
@@ -150,7 +175,9 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             return 1-(float(torch.sum(correct))/float(len(index[0])))
         else:
             # end-point-error for sceneflow
+            # ignore padding
             output = pred_disp[:,4:,:]
+            disp_true = disp_true[:,4:,:]
             mask = disp_true < 192
             if len(disp_true[mask])==0:
                loss = 0
@@ -206,12 +233,15 @@ def main():
 
         #SAVE
         savefilename = args.savemodel+'finetune_'+str(epoch)+'.tar'
+        '''
         torch.save({
             'epoch': epoch,
             'state_dict': model.state_dict(),
             'train_loss': total_train_loss/len(TrainImgLoader),
             'test_loss': total_test_loss/len(TestImgLoader)*100 if 'kitti' in args.datatype else total_test_loss/len(TestImgLoader),
         }, savefilename)
+        '''
+        torch.save(refine_model.state_dict(), savefilename)
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
     print(max_epo)
     print(max_acc)

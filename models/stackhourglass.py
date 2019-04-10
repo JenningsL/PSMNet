@@ -6,7 +6,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import math
 from submodule import *
-from unet_refine import DepthRefineNet, BasicBlock, Bottleneck, UpProj_Block
 
 class hourglass(nn.Module):
     def __init__(self, inplanes):
@@ -56,8 +55,6 @@ class PSMNet(nn.Module):
         self.maxdisp = maxdisp
 
         self.feature_extraction = feature_extraction()
-
-        self.refine_depth = DepthRefineNet(BasicBlock, [2, 2, 2, 2], UpProj_Block)
 
         self.dres0 = nn.Sequential(convbn_3d(64, 32, 3, 1, 1),
                                      nn.ReLU(inplace=True),
@@ -137,8 +134,8 @@ class PSMNet(nn.Module):
         cost3 = self.classif3(out3) + cost2
 
         if self.training:
-            cost1 = F.upsample(cost1, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
-            cost2 = F.upsample(cost2, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
+            cost1 = F.upsample(cost1, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear', align_corners=True)
+            cost2 = F.upsample(cost2, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear', align_corners=True)
 
             cost1 = torch.squeeze(cost1,1)
             pred1 = F.softmax(cost1,dim=1)
@@ -147,21 +144,14 @@ class PSMNet(nn.Module):
             cost2 = torch.squeeze(cost2,1)
             pred2 = F.softmax(cost2,dim=1)
             pred2 = disparityregression(self.maxdisp)(pred2)
-            # refine depth
-            pred1 = self.refine_depth(left, pred1, sparse_disp)
-            pred2 = self.refine_depth(left, pred2, sparse_disp)
 
-        cost3 = F.upsample(cost3, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
+        cost3 = F.upsample(cost3, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear', align_corners=True)
         cost3 = torch.squeeze(cost3,1)
         pred3 = F.softmax(cost3,dim=1)
         #For your information: This formulation 'softmax(c)' learned "similarity"
         #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
         #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
         pred3 = disparityregression(self.maxdisp)(pred3)
-        #print('before:', pred3)
-        # refine depth
-        pred3 = self.refine_depth(left, pred3, sparse_disp)
-        #print('after:', pred3)
 
         if self.training:
             return pred1, pred2, pred3
