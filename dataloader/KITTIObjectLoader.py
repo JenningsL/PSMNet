@@ -144,10 +144,10 @@ class KITTIObjectLoader(data.Dataset):
             left_img = processed(left_img)
             right_img = processed(right_img)
             # sparse = get_sparse_disp(dataL, erase_ratio=0.9)
-            visualize_disparity(dataL)
+            #visualize_disparity(dataL)
             # visualize_disparity(sparse)
 
-            return left_img, right_img, dataL
+            return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
 
     def __len__(self):
         return len(self.frame_ids)

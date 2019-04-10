@@ -19,6 +19,7 @@ import time
 import math
 
 from models import *
+from models import unet_refine
 
 parser = argparse.ArgumentParser(description='PSMNet')
 parser.add_argument('--maxdisp', type=int ,default=192,
@@ -75,9 +76,8 @@ else:
              KITTIObjectLoader(args.datapath, 'train', training=True),
              batch_size=8, shuffle=True, num_workers=8, drop_last=False)
     TestImgLoader = torch.utils.data.DataLoader(
-             KITTIObjectLoader(args.datapath, 'val', training=True),
+             KITTIObjectLoader(args.datapath, 'val', training=False),
              batch_size=4, shuffle=False, num_workers=4, drop_last=False)
-
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
@@ -103,7 +103,8 @@ if args.loadmodel_refine is not None:
     state_dict = torch.load(args.loadmodel_refine)
     refine_model.load_state_dict(state_dict)
 
-print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
+print('Number of PSMNet parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
+print('Number of RefineNet parameters: {}'.format(sum([p.data.nelement() for p in refine_model.parameters()])))
 
 optimizer = optim.Adam(refine_model.parameters(), lr=0.001, betas=(0.9, 0.999))
 #optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.001, betas=(0.9, 0.999))
@@ -135,8 +136,7 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
             output2 = torch.squeeze(output2,1)
             output3 = torch.squeeze(output3,1)
             #print(output1, output2, output3)
-            #if np.isnan(np.min(output1)) or np.isnan(np.min(output2)) or np.isnan(np.min(output3)):
-            #    print('nan in output!')
+            assert not torch.isnan(output3).any()
             loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) + 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) + F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True)
         elif args.model == 'basic':
             output = model(imgL,imgR)
@@ -166,7 +166,6 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             output3 = torch.squeeze(output3,1)
 
         pred_disp = output3.data.cpu()
-        #skimage.io.imsave('outputs_img/1.png',(torch.squeeze(pred_disp,0)*256).numpy().astype('uint16'))
         #print(pred_disp[0])
         #np.save('test.npy', pred_disp)
         #sys.exit()
