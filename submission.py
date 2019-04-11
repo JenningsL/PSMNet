@@ -18,6 +18,7 @@ import time
 import math
 from utils import preprocess
 from models import *
+from models import unet_refine
 from dataloader.KITTIObjectLoader import KITTIObjectLoader
 
 # 2012 data /media/jiaren/ImageNet/data_scene_flow_2012/testing/
@@ -93,7 +94,7 @@ def main():
    processed = preprocess.get_transform(augment=False)
 
    for inx in range(len(dataloader)):
-       imgL_o, imgR_o, sparse_disp_L = dataloader[inx]
+       imgL_o, imgR_o, sparse_disp_L, _ = dataloader[inx]
        # imgL_o = (skimage.io.imread(test_left_img[inx]).astype('float32'))
        # imgR_o = (skimage.io.imread(test_right_img[inx]).astype('float32'))
        imgL = imgL_o.numpy()
