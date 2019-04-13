@@ -129,6 +129,11 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
         if args.model == 'stackhourglass':
             with torch.no_grad():
                 output1, output2, output3 = model(imgL,imgR,disp_true_sparse)
+            # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
+            if args.datatype == 'sceneflow':
+                output1 *= 1.15
+                output2 *= 1.15
+                output3 *= 1.15
             output1 = refine_model(imgL, output1, disp_true_sparse)
             output2 = refine_model(imgL, output2, disp_true_sparse)
             output3 = refine_model(imgL, output3, disp_true_sparse)
@@ -162,9 +167,11 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             imgL, imgR, disp_true_sparse = imgL.cuda(), imgR.cuda(), sparse_disp_L.cuda()
         with torch.no_grad():
             output3 = model(imgL,imgR, disp_true_sparse)
+            # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
+            if args.datatype == 'sceneflow':
+                output3 *= 1.15
             output3 = refine_model(imgL, output3, disp_true_sparse)
             output3 = torch.squeeze(output3,1)
-
         pred_disp = output3.data.cpu()
         #print(pred_disp[0])
         #np.save('test.npy', pred_disp)
@@ -187,7 +194,9 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             # ignore padding
             output = pred_disp[:,4:,:]
             disp_true = disp_true[:,4:,:]
-            mask = disp_true < 192
+            mask1 = disp_true < 192
+            mask2 = disp_true > 0
+            mask = mask1 * mask2
             if len(disp_true[mask])==0:
                loss = 0
             else:
