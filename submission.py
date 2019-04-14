@@ -107,6 +107,9 @@ def test(imgL,imgR, sparse_disp_L, refine=True):
         imgL, imgR, sparse_disp_L = Variable(imgL), Variable(imgR), Variable(sparse_disp_L)
         with torch.no_grad():
             output = model(imgL,imgR, sparse_disp_L)
+            # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
+            if args.datatype == 'sceneflow':
+                output *= 1.15
             #print('mean of raw predict:', np.mean(output.cpu().numpy()))
             if refine:
                 output = refine_model(imgL, output, sparse_disp_L)
