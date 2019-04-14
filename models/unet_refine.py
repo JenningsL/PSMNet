@@ -289,7 +289,7 @@ class DepthRefineNet(nn.Module):
     def __init__(self, block, layers, up_proj_block):
         self.inplanes = 64
         super(DepthRefineNet, self).__init__()
-        self.conv1_1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        self.conv1_1 = nn.Conv2d(4, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -344,9 +344,11 @@ class DepthRefineNet(nn.Module):
 
     def forward(self, x, blurry_depth, sparse_depth):
         [batch_size, channel, height, width] = x.size()
-        # input is rgbd
         #sparse_depth = x.narrow(1,3,1).clone() # sparse ground truth
         sparse_depth = torch.unsqueeze(sparse_depth, 1)
+        # input is rgbd
+        # TODO: normalize sparse depth ?
+        x = torch.cat((x, sparse_depth), 1)
 
         x = self.conv1_1(x)
         skip4 = x

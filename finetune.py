@@ -86,7 +86,8 @@ elif args.model == 'basic':
 else:
     print('no model')
 
-refine_model = unet_refine.resnet34(pretrained=True)
+#refine_model = unet_refine.resnet34(pretrained=True)
+refine_model = unet_refine.resnet18(pretrained=True)
 
 if args.cuda:
     model = nn.DataParallel(model)
@@ -106,8 +107,9 @@ if args.loadmodel_refine is not None:
 print('Number of PSMNet parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 print('Number of RefineNet parameters: {}'.format(sum([p.data.nelement() for p in refine_model.parameters()])))
 
-optimizer = optim.Adam(refine_model.parameters(), lr=0.001, betas=(0.9, 0.999))
-#optimizer = optim.Adam(model.module.refine_depth.parameters(), lr=0.001, betas=(0.9, 0.999))
+#optimizer = optim.Adam(refine_model.parameters(), lr=0.001, betas=(0.9, 0.999))
+optimizer = optim.SGD(refine_model.parameters(), lr=0.01, weight_decay=0.0001)
+scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.2**(epoch//10))
 
 def train(imgL,imgR,disp_L,sparse_disp_L):
         model.train()
@@ -213,6 +215,9 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+def get_learning_rate(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
 def main():
     max_acc=0
@@ -222,7 +227,9 @@ def main():
     for epoch in range(1, args.epochs+1):
         total_train_loss = 0
         total_test_loss = 0
-        adjust_learning_rate(optimizer,epoch)
+        #adjust_learning_rate(optimizer,epoch)
+        scheduler.step()
+        print('epoch {0} learning rate {1}'.format(epoch, get_learning_rate(optimizer)))
         ## training ##
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L, sparse_disp_crop_L) in enumerate(TrainImgLoader):
             start_time = time.time()

@@ -77,7 +77,8 @@ elif args.model == 'basic':
 else:
     print('no model')
 
-refine_model = unet_refine.resnet34(pretrained=True)
+#refine_model = unet_refine.resnet34(pretrained=True)
+refine_model = unet_refine.resnet18(pretrained=True)
 
 model = nn.DataParallel(model, device_ids=[0])
 model.cuda()
@@ -106,8 +107,10 @@ def test(imgL,imgR, sparse_disp_L, refine=True):
         imgL, imgR, sparse_disp_L = Variable(imgL), Variable(imgR), Variable(sparse_disp_L)
         with torch.no_grad():
             output = model(imgL,imgR, sparse_disp_L)
+            #print('mean of raw predict:', np.mean(output.cpu().numpy()))
             if refine:
                 output = refine_model(imgL, output, sparse_disp_L)
+                #print('mean of refine predict:', np.mean(output.cpu().numpy()))
         output = torch.squeeze(output)
         pred_disp = output.data.cpu().numpy()
 
@@ -119,34 +122,24 @@ def main():
    if not os.path.isdir(args.output):
        os.mkdir(args.output)
    for inx in range(len(dataloader)):
+       imgL_o, imgR_o, disp, sparse_disp_L = dataloader[inx]
        if args.datatype == 'kitti_object':
            frame_id = dataloader.frame_ids[inx]
+           sparse_disp_L = disp # disp is still sparse in kitti_object
        else:
            frame_id = str(inx)
-       imgL_o, imgR_o, sparse_disp_L, _ = dataloader[inx]
        imgL = imgL_o.numpy()
        imgR = imgR_o.numpy()
        imgL = np.reshape(imgL,[1,3,imgL.shape[1],imgL.shape[2]])
        imgR = np.reshape(imgR,[1,3,imgR.shape[1],imgR.shape[2]])
        sparse_disp_L = np.reshape(sparse_disp_L,[1,sparse_disp_L.shape[0],sparse_disp_L.shape[1]])
+       #print('mean of gt:', np.mean(disp))
 
-       # pad to (384, 1248)
-       '''
-       top_pad = 384-imgL.shape[2]
-       left_pad = 1248-imgL.shape[3]
-       imgL = np.lib.pad(imgL,((0,0),(0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
-       imgR = np.lib.pad(imgR,((0,0),(0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
-       sparse_disp_L = np.lib.pad(sparse_disp_L,((0,0),(top_pad,0),(0,left_pad)),mode='constant',constant_values=0)
-       '''
        start_time = time.time()
-       pred_disp = test(imgL,imgR,sparse_disp_L,refine=False)
+       pred_disp = test(imgL,imgR,sparse_disp_L,refine=True)
        print('%s: time = %.2f' %(frame_id, time.time() - start_time))
-       '''
-       top_pad   = 384-imgL_o.shape[0]
-       left_pad  = 1248-imgL_o.shape[1]
-       img = pred_disp[top_pad:,:-left_pad]
-       '''
        print(pred_disp.shape)
+       # TODO: crop output to original size
        np.save(os.path.join(args.output, frame_id+'.npy'), pred_disp)
 
 if __name__ == '__main__':
