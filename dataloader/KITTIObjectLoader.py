@@ -18,7 +18,7 @@ sys.path.append(ROOT_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'kitti'))
 import kitti_util
 from kitti_object import *
-import psutil
+#import psutil
 from data_util import get_sparse_disp, crop_np_matrix
 from utils.vis import visualize_disparity
 
@@ -119,7 +119,9 @@ class KITTIObjectLoader(data.Dataset):
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
-            dataL = crop_np_matrix(dataL, th, tw)
+            disp_img = Image.fromarray(dataL)
+            disp_img = disp_img.crop((x1, y1, x1 + tw, y1 + th))
+            dataL = np.asarray(disp_img)
 
             processed = preprocess.get_transform(augment=False)
             left_img   = processed(left_img)
@@ -138,7 +140,9 @@ class KITTIObjectLoader(data.Dataset):
             right_img = right_img.crop((w-target_w, h-target_h, w, h))
             w1, h1 = left_img.size
 
-            dataL = crop_np_matrix(dataL, target_h, target_w)
+            disp_img = Image.fromarray(dataL)
+            disp_img = disp_img.crop((w-target_w, h-target_h, w, h))
+            dataL = np.asarray(disp_img)
 
             processed = preprocess.get_transform(augment=False)
             left_img = processed(left_img)
