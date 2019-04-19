@@ -65,7 +65,7 @@ class myImageFloder(data.Dataset):
            left_img   = processed(left_img)
            right_img  = processed(right_img)
 
-           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.9)
+           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
         else:
            w, h = left_img.size
            left_img = left_img.crop((w-960, h-544, w, h))
@@ -77,7 +77,7 @@ class myImageFloder(data.Dataset):
            dataL = np.pad(dataL, ((max(544-h, 0), 0), (max(960-w, 0), 0)), 'constant', constant_values=0)
            dataL = dataL[max(dataL.shape[0]-544, 0):dataL.shape[0], max(dataL.shape[1]-960, 0):dataL.shape[1]]
 
-           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.9)
+           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
 
     def __len__(self):
         return len(self.left)

@@ -67,17 +67,17 @@ if args.datatype != 'kitti_object':
     all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
     TrainImgLoader = torch.utils.data.DataLoader(
              DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True),
-             batch_size=8, shuffle=True, num_workers=8, drop_last=False)
+             batch_size=16, shuffle=True, num_workers=8, drop_last=False)
     TestImgLoader = torch.utils.data.DataLoader(
              DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False),
-             batch_size=4, shuffle=False, num_workers=4, drop_last=False)
+             batch_size=8, shuffle=False, num_workers=4, drop_last=False)
 else:
     TrainImgLoader = torch.utils.data.DataLoader(
              KITTIObjectLoader(args.datapath, 'train', training=True),
-             batch_size=8, shuffle=True, num_workers=8, drop_last=False)
+             batch_size=16, shuffle=True, num_workers=8, drop_last=False)
     TestImgLoader = torch.utils.data.DataLoader(
              KITTIObjectLoader(args.datapath, 'val', training=False),
-             batch_size=4, shuffle=False, num_workers=4, drop_last=False)
+             batch_size=8, shuffle=False, num_workers=4, drop_last=False)
 
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
@@ -86,8 +86,9 @@ elif args.model == 'basic':
 else:
     print('no model')
 
-#refine_model = unet_refine.resnet34(pretrained=True)
-refine_model = unet_refine.resnet18(pretrained=True)
+#refine_model = unet_refine.resnet50(pretrained=True)
+refine_model = unet_refine.resnet34(pretrained=True)
+#refine_model = unet_refine.resnet18(pretrained=True)
 
 if args.cuda:
     model = nn.DataParallel(model)
@@ -102,13 +103,13 @@ if args.loadmodel is not None:
 if args.loadmodel_refine is not None:
     print('Loading refine model')
     state_dict = torch.load(args.loadmodel_refine)
-    refine_model.load_state_dict(state_dict)
+    refine_model.load_state_dict(state_dict['state_dict'])
 
 print('Number of PSMNet parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 print('Number of RefineNet parameters: {}'.format(sum([p.data.nelement() for p in refine_model.parameters()])))
 
 #optimizer = optim.Adam(refine_model.parameters(), lr=0.001, betas=(0.9, 0.999))
-optimizer = optim.SGD(refine_model.parameters(), lr=0.01, weight_decay=0.0001)
+optimizer = optim.SGD(refine_model.parameters(), lr=0.01, weight_decay=0.0001, momentum=0.9, nesterov=True)
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 0.2**(epoch//10))
 
 def train(imgL,imgR,disp_L,sparse_disp_L):
@@ -133,9 +134,9 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
                 output1, output2, output3 = model(imgL,imgR,disp_true_sparse)
             # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
             if args.datatype == 'sceneflow':
-                output1 *= 1.15
-                output2 *= 1.15
-                output3 *= 1.15
+                output1 *= 1.17
+                output2 *= 1.17
+                output3 *= 1.17
             output1 = refine_model(imgL, output1, disp_true_sparse)
             output2 = refine_model(imgL, output2, disp_true_sparse)
             output3 = refine_model(imgL, output3, disp_true_sparse)
@@ -145,6 +146,7 @@ def train(imgL,imgR,disp_L,sparse_disp_L):
             #print(output1, output2, output3)
             assert not torch.isnan(output3).any()
             loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) + 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) + F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True)
+            #loss = F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True)
         elif args.model == 'basic':
             output = model(imgL,imgR)
             output = torch.squeeze(output3,1)
@@ -171,17 +173,13 @@ def test(imgL,imgR,disp_true, sparse_disp_L):
             output3 = model(imgL,imgR, disp_true_sparse)
             # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
             if args.datatype == 'sceneflow':
-                output3 *= 1.15
+                output3 *= 1.17
             output3 = refine_model(imgL, output3, disp_true_sparse)
             output3 = torch.squeeze(output3,1)
         pred_disp = output3.data.cpu()
-        #print(pred_disp[0])
-        #np.save('test.npy', pred_disp)
-        #sys.exit()
 
         #computing 3-px error for kitti#
         if 'kitti' in args.datatype:
-            #true_disp = np.copy(disp_true)
             true_disp = disp_true
             index = np.argwhere(true_disp>0)
             disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
@@ -224,7 +222,11 @@ def main():
     max_epo=0
     start_full_time = time.time()
 
-    for epoch in range(1, args.epochs+1):
+    start_epoch = 1
+    #if args.loadmodel_refine is not None:
+    #    start_epoch = state_dict['epoch']
+    #assert(start_epoch < args.epochs+1)
+    for epoch in range(start_epoch, args.epochs+1):
         total_train_loss = 0
         total_test_loss = 0
         #adjust_learning_rate(optimizer,epoch)
@@ -258,15 +260,13 @@ def main():
 
         #SAVE
         savefilename = args.savemodel+'finetune_'+str(epoch)+'.tar'
-        '''
         torch.save({
             'epoch': epoch,
-            'state_dict': model.state_dict(),
+            'state_dict': refine_model.state_dict(),
             'train_loss': total_train_loss/len(TrainImgLoader),
             'test_loss': total_test_loss/len(TestImgLoader)*100 if 'kitti' in args.datatype else total_test_loss/len(TestImgLoader),
         }, savefilename)
-        '''
-        torch.save(refine_model.state_dict(), savefilename)
+        #torch.save(refine_model.state_dict(), savefilename)
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
     print(max_epo)
     print(max_acc)

@@ -42,8 +42,7 @@ class Affinity_Propagate(nn.Module):
         #print('mean sparse_depth:', torch.sum(sparse_depth)/torch.nonzero(sparse_depth).size(0))
         result_depth = (1- sparse_mask)*blur_depth.clone()+sparse_mask*sparse_depth
 
-
-        for i in range(16):
+        for i in range(24):
         # one propagation
             spn_kernel = 3
             elewise_max_gate1 = self.eight_way_propagation(gate1_w1_cmb, result_depth, spn_kernel)
@@ -62,6 +61,22 @@ class Affinity_Propagate(nn.Module):
         #print('non zero process:', torch.mean(result_depth))
         return result_depth
 
+    def eight_way_propagation_v2(self, weight_matrix, blur_matrix, kernel):
+        [batch_size, channels, height, width] = weight_matrix.size()
+        weight_abs = torch.abs(weight_matrix)
+        self.avg_conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=kernel, stride=1,
+                                  padding=(kernel - 1) // 2, bias=False)
+        weight = torch.ones(1, 1, kernel, kernel).cuda()
+        weight[0, 0, (kernel - 1) // 2, (kernel - 1) // 2] = 0  # 中心点置为0？   #kenel= [1,1,1]
+        self.avg_conv.weight = nn.Parameter(weight)  # [1,0,1]
+        for param in self.avg_conv.parameters():  # [1,1,1]
+            param.requires_grad = False
+
+        weight_sum = self.avg_conv(weight_matrix)
+        abs_sum=self.avg_conv(weight_abs)
+        out=torch.div((abs_sum-weight_sum)*blur_matrix+self.avg_conv(weight_matrix*blur_matrix),abs_sum)
+
+        return out
 
     def eight_way_propagation(self, weight_matrix, blur_matrix, kernel):
         [batch_size, channels, height, width] = weight_matrix.size()

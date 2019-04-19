@@ -1,6 +1,7 @@
 from __future__ import print_function
 import argparse
 import os
+import sys
 import random
 import torch
 import torch.nn as nn
@@ -69,7 +70,6 @@ else:
     all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
     dataloader = DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False)
 
-
 if args.model == 'stackhourglass':
     model = stackhourglass(args.maxdisp)
 elif args.model == 'basic':
@@ -77,8 +77,8 @@ elif args.model == 'basic':
 else:
     print('no model')
 
-#refine_model = unet_refine.resnet34(pretrained=True)
-refine_model = unet_refine.resnet18(pretrained=True)
+refine_model = unet_refine.resnet34(pretrained=True)
+#refine_model = unet_refine.resnet18(pretrained=True)
 
 model = nn.DataParallel(model, device_ids=[0])
 model.cuda()
@@ -91,7 +91,7 @@ if args.loadmodel is not None:
 if args.loadmodel_refine is not None:
     print('Loading refine model')
     state_dict = torch.load(args.loadmodel_refine)
-    refine_model.load_state_dict(state_dict)
+    refine_model.load_state_dict(state_dict['state_dict'])
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
@@ -109,7 +109,7 @@ def test(imgL,imgR, sparse_disp_L, refine=True):
             output = model(imgL,imgR, sparse_disp_L)
             # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
             if args.datatype == 'sceneflow':
-                output *= 1.15
+                output *= 1.17
             #print('mean of raw predict:', np.mean(output.cpu().numpy()))
             if refine:
                 output = refine_model(imgL, output, sparse_disp_L)
