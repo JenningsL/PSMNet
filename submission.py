@@ -77,7 +77,7 @@ elif args.model == 'basic':
 else:
     print('no model')
 
-refine_model = unet_refine.resnet34(pretrained=True)
+refine_model = unet_refine.resnet34(pretrained=True, rgbd=True)
 #refine_model = unet_refine.resnet18(pretrained=True)
 
 model = nn.DataParallel(model, device_ids=[0])
@@ -107,9 +107,6 @@ def test(imgL,imgR, sparse_disp_L, refine=True):
         imgL, imgR, sparse_disp_L = Variable(imgL), Variable(imgR), Variable(sparse_disp_L)
         with torch.no_grad():
             output = model(imgL,imgR, sparse_disp_L)
-            # FIXME: the pretrained sceneflow model need to be scaled: https://github.com/JiaRenChang/PSMNet/issues/64
-            if args.datatype == 'sceneflow':
-                output *= 1.17
             #print('mean of raw predict:', np.mean(output.cpu().numpy()))
             if refine:
                 output = refine_model(imgL, output, sparse_disp_L)
@@ -126,6 +123,7 @@ def main():
        os.mkdir(args.output)
    for inx in range(len(dataloader)):
        imgL_o, imgR_o, disp, sparse_disp_L = dataloader[inx]
+       print('sparse depth:', len(np.nonzero(sparse_disp_L)[0]))
        if args.datatype == 'kitti_object':
            frame_id = dataloader.frame_ids[inx]
            sparse_disp_L = disp # disp is still sparse in kitti_object

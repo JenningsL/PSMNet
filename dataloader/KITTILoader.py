@@ -48,7 +48,7 @@ class myImageFloder(data.Dataset):
            th, tw = 256, 512
 
            x1 = random.randint(0, w - tw)
-           y1 = random.randint(0, h - th)
+           y1 = random.randint(80, h - th) # only the bottom half have depth measurement
 
            left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
            right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
@@ -59,7 +59,9 @@ class myImageFloder(data.Dataset):
            processed = preprocess.get_transform(augment=False)
            left_img   = processed(left_img)
            right_img  = processed(right_img)
-           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
+
+           erase_ratio = random.uniform(0.9, 1)
+           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=erase_ratio)
         else:
            w, h = left_img.size
 
@@ -74,7 +76,7 @@ class myImageFloder(data.Dataset):
            left_img       = processed(left_img)
            right_img      = processed(right_img)
 
-           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.8)
+           return left_img, right_img, dataL, get_sparse_disp(dataL, erase_ratio=0.95)
 
     def __len__(self):
         return len(self.left)

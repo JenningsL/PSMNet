@@ -286,10 +286,15 @@ class Gudi_UpProj_Block_Cat(nn.Module):
 
 class DepthRefineNet(nn.Module):
 
-    def __init__(self, block, layers, up_proj_block):
-        self.inplanes = 64
+    def __init__(self, block, layers, up_proj_block, rgbd=False):
         super(DepthRefineNet, self).__init__()
-        self.conv1_1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        self.inplanes = 64
+        self.rgbd = rgbd
+        if self.rgbd:
+            input_channel = 4
+        else:
+            input_channel = 3
+        self.conv1_1 = nn.Conv2d(input_channel, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -348,7 +353,9 @@ class DepthRefineNet(nn.Module):
         sparse_depth = torch.unsqueeze(sparse_depth, 1)
         # input is rgbd
         # TODO: normalize sparse depth ?
-        #x = torch.cat((x, sparse_depth), 1)
+        if self.rgbd:
+            x = torch.cat((x, sparse_depth), 1)
+        #x = torch.cat((x, torch.unsqueeze(blurry_depth, 1), sparse_depth), 1)
 
         x = self.conv1_1(x)
         skip4 = x
